@@ -1,0 +1,93 @@
+import numpy as np
+import math
+import pandas as pd
+
+# ============================================================
+# CONFIGURACIÓN: RED DE SUPERFICIE POLAR (TPSA)
+# ============================================================
+BASE_A_VALOR = 1.1547
+A = math.log(1.1547)
+L0 = 0.28003  # radio de Bohr al cuadrado (Referencia de baja TPSA)
+
+# Diccionario Mix: Biomoléculas + Fármacos (Valores TPSA en Å²)
+# Fuentes: PubChem / DrugBank
+mix_data = {
+    
+"Aciclovir": 119.0,"Valaciclovir": 150.0,"Oseltamivir": 90.6,"Ribavirina": 167.0,
+"Lamotrigina": 58.0,"Levetiracetam": 63.4,"Gabapentina": 63.3,
+"Pregabalina": 63.3,"Carbamazepina": 58.2,"Fenitoina": 58.2,"Ácido valproico": 37.3,
+"Topiramato": 81.6,"Clonazepam": 58.0, "Lorazepam": 52.9,"Midazolam": 27.3,
+"Zolpidem": 44.8,"Morfina": 52.9,"Codeina": 41.9,"Oxicodona": 59.0,"Fentanilo": 23.6,
+"Buprenorfina": 52.9,"Tramadol": 32.7,"Metadona": 20.3, "Lidocaina": 32.3,
+"Bupivacaina": 32.3,"Ketamina": 16.1,"Propofol": 20.2,"Ondansetron": 43.8,
+"Metoclopramida": 63.2,
+"Domperidona": 66.2,"Loperamida": 43.8,"Bisacodilo": 72.8,"Lactulosa": 122.5, 
+"Levotiroxina": 118.0,"Metimazol": 28.2,"Propiltiouracilo": 94.6,"Finasterida": 37.3,
+"Tamsulosina": 48.1,"Sitagliptina": 155.0,"Glibenclamida": 103.0,"Gliclazida": 92.0,
+"Pioglitazona": 84.5,"Clopidogrel": 57.8, "Ticagrelor": 139.0,"Digoxina": 202.0,"Amiodarona": 44.8,
+"Nitroglicerina": 137.0,"Verapamilo": 63.7,"Diltiazem": 84.4,"Hidroxicloroquina": 48.4,
+"Paracetamol": 49.3,"Ibuprofeno": 37.3,"Aspirina": 63.6,"Naproxeno": 46.5,"Diclofenaco": 49.3,
+"Meloxicam": 107.0,"Metamizol": 103.0, "Omeprazol": 77.2,"Pantoprazol":94.0,
+"Amoxicilina": 132.0,"Azitromicina": 181.0,"Ciprofloxacino": 74.6,"Doxiciclina": 181.0,
+"Metformina": 91.5,"Empagliflozina": 90.1,"Losartan": 92.5,"Valsartan": 112.0,"Amlodipino": 74.6,
+"Metoprolol": 50.7,"Alprazolam": 43.1,"Quetiapina": 43.9,"Haloperidol": 40.5,
+"Sildenafilo": 113.7,"Sertralina": 12.0,"Paroxetine": 41.4,"Citalopram": 27.5,"Mirtazapine": 29.5,
+"Buspirone": 41.4,"Hydroxyzine": 32.7,"Olanzapine": 55.9,"Risperidone": 65.4,"Paliperidone": 73.9,
+"Lurasidone": 68.4,"Oxcarbazepine": 63.6,"Zonisamide": 73.9,"Rufinamide": 83.4,
+"Paroxetine": 41.4,"Citalopram": 27.5,"Mirtazapine": 29.5,"Buspirone": 41.4,"Hydroxyzine": 32.7,
+"colchicina":73.4,"alopurinol":68.4,"febusostat":99.1,"memantine":27.5,"donepecil":32.7,
+"rivastigmine":41.4,"galantamine":41.4,"baclofen":63.6,
+"tizanidine":55.9,"ciclobenzaprime":27.5,"orlistat":99.1,"prasugrel":67.2,"estradiol":40.6,
+"progesterone":37.3,"espironolactone":71.3,"salmeterol":73.4,"ipratropium":55.4,
+"desloratadine":48.4,"linagliptin":106.0,"canagliflozin":103.0,"cefixime":173.0,"cefuroxime":150.0,
+"claritromicine":139.0,"moxifloxacin":83.4,"levofloxacin":93.1,"nevibolol":50.2,
+"rabeprazol":83.4,"dabigatran":124.0,"liraglutide":180.0,
+"evacetrapib":87.4
+
+
+    
+ 
+    }
+
+
+
+def test_tpsa_final(datos, base_A, ref_L0):
+    resultados = []
+    residuos = []
+    
+    for nombre, valor in datos.items():
+        if valor <= 0: continue
+        razon_log = math.log(valor / ref_L0)
+        q_entero = round(razon_log / base_A)
+        
+        residuo = abs(razon_log - (q_entero * base_A))
+        val_teorico = ref_L0 * math.exp(q_entero * base_A)
+        error_rel = abs(valor - val_teorico) / valor * 100
+        
+        resultados.append({
+            "Molecula": nombre, "TPSA": valor, "Nodo (q)": q_entero,
+            "Residuo": residuo, "Error %": error_rel
+        })
+        residuos.append(residuo) 
+    
+    return pd.DataFrame(resultados), np.mean(residuos)
+
+# Ejecución
+df_res, res_medio = test_tpsa_final(mix_data, A, L0)
+
+# Monte Carlo (10,000 iteraciones)
+iteraciones = 10000
+exitos = 0
+v_min, v_max = min(mix_data.values()), max(mix_data.values())
+
+for _ in range(iteraciones):
+    random_v = np.random.uniform(v_min, v_max, len(mix_data))
+    r_mean = np.mean([abs(math.log(v/L0) - round(math.log(v/L0)/A)*A) for v in random_v])
+    if r_mean <= res_medio:
+        exitos += 1
+
+print(f"--- TEST TPSA MIX (N=120, Base 1.154, m=0) ---")
+print(f"P-Value: {exitos/iteraciones:.4f}")
+print(f"Residuo Medio: {res_medio:.6f}")
+print("-" * 70)
+print(df_res.sort_values(by="Nodo (q)").to_string(index=False))
