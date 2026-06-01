@@ -1,0 +1,67 @@
+import numpy as np
+import math
+import pandas as pd
+
+# ============================================================
+# CONFIGURACIÓN: RED DE SUPERFICIE POLAR (TPSA)
+# ============================================================
+BASE_A_VALOR = 1.125
+A = math.log(1.125)
+L0 = 0.28003  # Colesterol (Referencia de baja polaridad)
+
+# Diccionario Mix: Biomoléculas + Fármacos (Valores TPSA en Å²)
+# Fuentes: PubChem / DrugBank
+mix_data = {
+    
+    # Fármacos
+
+ "Glycine": 63.32,"Alanine": 63.32,"Valine": 63.32,"Leucine": 63.32,"Isoleucine": 63.32,"Serine": 83.55,"Threonine": 83.55,
+    "Cysteine": 88.00,"Methionine": 88.00,"Aspartic acid": 100.62,"Glutamic acid": 100.62,"Asparagine": 106.41,
+    "Glutamine": 106.41,"Lysine": 89.34,"Arginine": 127.22,"Histidine": 91.50,"Phenylalanine": 63.32,"Tyrosine": 83.55,
+    "Tryptophan": 79.11,"Proline": 49.33,"Selenocysteine": 88.00,"Pyrrolysine": 114.00,"ATP": 279.00
+
+
+ }
+
+
+
+def test_tpsa_final(datos, base_A, ref_L0):
+    resultados = []
+    residuos = []
+    
+    for nombre, valor in datos.items():
+        if valor <= 0: continue
+        razon_log = math.log(valor / ref_L0)
+        q_entero = round(razon_log / base_A)
+        
+        residuo = abs(razon_log - (q_entero * base_A))
+        val_teorico = ref_L0 * math.exp(q_entero * base_A)
+        error_rel = abs(valor - val_teorico) / valor * 100
+        
+        resultados.append({
+            "Molecula": nombre, "TPSA": valor, "Nodo (q)": q_entero,
+            "Residuo": residuo, "Error %": error_rel
+        })
+        residuos.append(residuo) 
+    
+    return pd.DataFrame(resultados), np.mean(residuos)
+
+# Ejecución
+df_res, res_medio = test_tpsa_final(mix_data, A, L0)
+
+# Monte Carlo (10,000 iteraciones)
+iteraciones = 10000
+exitos = 0
+v_min, v_max = min(mix_data.values()), max(mix_data.values())
+
+for _ in range(iteraciones):
+    random_v = np.random.uniform(v_min, v_max, len(mix_data))
+    r_mean = np.mean([abs(math.log(v/L0) - round(math.log(v/L0)/A)*A) for v in random_v])
+    if r_mean <= res_medio:
+        exitos += 1
+
+print(f"--- TEST TPSA MIX (N=22, Base 1.125, m=0) ---")
+print(f"P-Value: {exitos/iteraciones:.4f}")
+print(f"Residuo Medio: {res_medio:.6f}")
+print("-" * 70)
+print(df_res.sort_values(by="Nodo (q)").to_string(index=False))
